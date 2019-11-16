@@ -1,18 +1,24 @@
 use image::{GenericImageView, GenericImage, DynamicImage};
 use gif::{Frame, Encoder, Repeat, SetParameter};
-use std::io::{self, Write};
+use std::{io, io::Write, fs::File};
 
 fn main() {
     let mut _file1 = None;
     let mut _file2 = None;
 
+    // TODO ADD SUPPORT FOR OUTPUT PATH
     let mut write_to_disk = false;
+    let mut write_json = false;
     
     let mut output = "output.gif";
 
     let mut frame : f32 = 10.0;
     let mut t : f32 = 100.0 / 10.0;
 
+    let mut resize = false;
+    let mut resize_width = None;
+    let mut resize_height = None;
+    
     let mut conversion_speed : i32 = 10;
 
     let args : Vec<String> = std::env::args().collect();
@@ -22,8 +28,10 @@ fn main() {
         println!("Options :");
         println!("\t-o <output path> Set output path.");
         println!("\t-w Write frames to disk.");
+        println!("\t-a Write a .json used by apngasm.");
         println!("\t-n <count> Set frames count.");
-        println!("\t-s <speed> Set gif conversion speed. Must be between 1 and 30, 30 is loss quality but faster");
+        println!("\t-s <speed> Set gif conversion speed. Must be between 1 and 30, 30 is loss quality but faster.");
+        println!("\t-r <width> <height> Resize image.");
         std::process::exit(0);
     }
     
@@ -56,7 +64,17 @@ fn main() {
                     } else {
                         panic!("Missing arg for conversion speed");
                     }
-                }
+                },
+                "-r" => {
+                    if args.len() > i + 2 {
+                        resize = true;
+                        resize_width =  Some(args[i + 1].parse::<u32>().unwrap());
+                        resize_height = Some(args[i + 2].parse::<u32>().unwrap())
+                    } else {
+                        panic!("Missing arg for conversion speed");
+                    }
+                },
+                "-a" => write_json = true,
                 _ => continue,
             }
         }
@@ -78,13 +96,23 @@ fn main() {
         },
     };
 
+    if !write_to_disk && write_json {
+        eprintln!("Warning : You write duration to disk but not frames ?");
+    }
+
     print!("Parameters :\n");
     print!("\tFile 1 : {}\n", file1);
     print!("\tFile 2 : {}\n", file2);
     print!("\tOutput : {}\n", output);
     print!("\tTotal of frames : {}, with a delay of : {}ms\n", frame, t);
     print!("\tWrite frames to disk : {}\n", write_to_disk);
-    print!("\tSpeed of conversion : {}\n\n", conversion_speed);
+    print!("\tWrite .json for apngasm : {}\n", write_json);
+    print!("\tSpeed of conversion : {}\n", conversion_speed);
+    if resize {
+        print!("\tResize : true, width : {}, height : {}\n\n", resize_width.unwrap(), resize_height.unwrap());
+    } else {
+        print!("\tResize : false\n\n");
+    }
     io::stdout().flush().ok().expect("Could not flush stdout");
 
     {
@@ -107,18 +135,24 @@ fn main() {
         }
     }
 
-    let img1 : DynamicImage = image::open(file1).unwrap_or_else(|error| {
+    let mut img1 : DynamicImage = image::open(file1).unwrap_or_else(|error| {
         eprintln!("Error when decoding img1 : {}", error);
         std::process::exit(-1);
     });
 
-    let img2 : DynamicImage = image::open(file2).unwrap_or_else(|error| {
+    let mut img2 : DynamicImage = image::open(file2).unwrap_or_else(|error| {
         eprintln!("Error when decoding img2 : {}", error);
         std::process::exit(-1);
     });
 
+    if resize {
+        img1 = img1.resize(resize_width.unwrap(), resize_height.unwrap(), image::imageops::FilterType::Nearest);
+
+        img2 = img2.resize(resize_width.unwrap(), resize_height.unwrap(), image::imageops::FilterType::Nearest);
+    }
+
     if write_to_disk {
-        let img_file1 = std::fs::File::create("0.png").unwrap_or_else(|error| {
+        let img_file1 = std::fs::File::create("0000.png").unwrap_or_else(|error| {
             eprintln!("Error when creating file : {}", error);
             std::process::exit(-1);
         });
@@ -128,7 +162,7 @@ fn main() {
             std::process::exit(-1);
         });
 
-        let img_file2 = std::fs::File::create(format!("{}.png", frame)).unwrap_or_else(|error| {
+        let img_file2 = std::fs::File::create(format!("{:04}.png", frame)).unwrap_or_else(|error| {
             eprintln!("Error when creating file : {}", error);
             std::process::exit(-1);
         });
@@ -136,16 +170,37 @@ fn main() {
         encoder2.encode(&mut *img2.raw_pixels(), img2.width(), img2.height(), img2.color()).unwrap_or_else(|error| {
             eprintln!("Error when encoding file : {}", error);
             std::process::exit(-1);
-        })
+        });
+    }
+
+    if write_json{
+        let mut json_file : File = File::create("output.json").unwrap_or_else(|error| {
+            eprintln!("Error when creating file : {}", error);
+            std::process::exit(-1);
+        });
+        let mut json = String::new();
+        json.push_str("{\n\t\"name\": \"output\",\n\t\"loops\": 0,\n\t\"skip_first\": false,\n\t\"frames\": [\n");
+        json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", 0, 1000).as_str());
+        for i in 1..frame as u32 {
+            json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", i, t * 10.0).as_str());
+        }
+        json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", frame, 1000).as_str());
+        for i in 1..(frame - 1.0) as u32 {
+            json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", frame + i as f32, t * 10.0).as_str());
+        }
+        json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}}\n", frame + frame - 1.0, t * 10.0).as_str());
+        json.push_str("\t]\n");
+        json.push_str("}");
+        json_file.write(json.as_bytes()).unwrap();
     }
 
     if img1.width() > std::u16::MAX.into() {
-        eprintln!("Error : Width must be =< at {}" , std::u16::MAX);
+        eprintln!("Error : Width must be <= at {}" , std::u16::MAX);
         std::process::exit(-1);
     }
 
     if img1.height() > std::u16::MAX.into() {
-        eprintln!("Error : Height must be =< at {}" , std::u16::MAX);
+        eprintln!("Error : Height must be <= at {}" , std::u16::MAX);
         std::process::exit(-1);
     }
 
@@ -175,15 +230,15 @@ fn main() {
 
     frames.resize((frame+frame) as usize, frame1);
 
-    let mut pixel2 = img2.raw_pixels();
     println!("Converting Frame {}", frame);
-    let mut frame2 = Frame::from_rgb_speed(img2.width() as u16, img2.height() as u16, &mut *pixel2, conversion_speed);
+    let mut frame2 = Frame::from_rgb_speed(img2.width() as u16, img2.height() as u16, &mut *img2.raw_pixels(), conversion_speed);
     frame2.delay = 100;
     frames[frame as usize] = frame2;
 
     for alpha in 1..(frame as u32)  {
-        print!("\r[{:04}:{:04}]", alpha, frame);
+        print!("\rGenrating frame {:04} out of {:04}", alpha + 1, frame);
         io::stdout().flush().ok().expect("Could not flush stdout");
+
         let mut img = DynamicImage::new_rgb8(img1.width(), img1.height());
         let a = 1.0 - (alpha as f32/frame);
         for x in 0..img1.width() {
@@ -199,15 +254,25 @@ fn main() {
             }
         }
         if write_to_disk {
-            let img_file = std::fs::File::create(format!("{}.png", alpha)).unwrap_or_else(|error| {
+            let img_file1 = std::fs::File::create(format!("{:04}.png", alpha)).unwrap_or_else(|error| {
                 eprintln!("Error when creating file : {}", error);
                 std::process::exit(-1);
             });
-            let encoder = image::png::PNGEncoder::new(img_file);
-            encoder.encode(&mut *img.raw_pixels(), img.width(), img.height(), img.color()).unwrap_or_else(|error| {
+            let encoder1 = image::png::PNGEncoder::new(img_file1);
+            encoder1.encode(&mut *img.raw_pixels(), img.width(), img.height(), img.color()).unwrap_or_else(|error| {
                 eprintln!("Error when encoding file : {}", error);
                 std::process::exit(-1);
-            })
+            });
+
+            let img_file2 = std::fs::File::create(format!("{:04}.png", frame + frame - alpha as f32)).unwrap_or_else(|error| {
+                eprintln!("Error when creating file : {}", error);
+                std::process::exit(-1);
+            });
+            let encoder2 = image::png::PNGEncoder::new(img_file2);
+            encoder2.encode(&mut *img.raw_pixels(), img.width(), img.height(), img.color()).unwrap_or_else(|error| {
+                eprintln!("Error when encoding file : {}", error);
+                std::process::exit(-1);
+            });
         }
         
         let mut f = Frame::from_rgb_speed(img1.width() as u16, img1.height() as u16, &mut *img.raw_pixels(), conversion_speed);
@@ -216,11 +281,12 @@ fn main() {
         frames[(frame + frame - alpha as f32) as usize] = f;
     }
 
-    print!("\r[{:04}:{:04}]\nEncoding gif ... ", frame, frame);
-    io::stdout().flush().ok().expect("Could not flush stdout");
+    println!("\nEncoding gif ... ");
 
-    for f in frames {
+    for (i, f) in frames.iter().enumerate() {
+        print!("\rWriting frame {:04} out of {:04}", i + 1, frames.len());
+        io::stdout().flush().ok().expect("Could not flush stdout");
         encoder.write_frame(&f).unwrap();
     }
-    println!("Done !");
+    println!("\nDone !");
 }
