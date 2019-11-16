@@ -246,10 +246,9 @@ fn main() {
                 let mut pixel1 = img1.get_pixel(x, y);
                 let pixel2 = img2.get_pixel(x, y);
 
-                // TODO OPTIMISE
-                pixel1[0] = (((pixel1[0] as f32/255.0)*a + (pixel2[0] as f32/255.0)*(1.0-a)) * 255.0) as u8;
+                pixel1[0] = (((pixel1[0] as f32 / 255.0)*a + (pixel2[0] as f32/255.0)*(1.0-a)) * 255.0) as u8;
                 pixel1[1] = (((pixel1[2] as f32/255.0)*a + (pixel2[1] as f32/255.0)*(1.0-a)) * 255.0) as u8;
-                pixel1[2] = (((pixel1[2] as f32/255.0)*a + (pixel2[2] as f32/255.0)*(1.0-a)) * 255.0) as u8;
+                pixel1[2] = (((pixel1[3] as f32/255.0)*a + (pixel2[3] as f32/255.0)*(1.0-a)) * 255.0) as u8;
                 img.put_pixel(x, y, pixel1);
             }
         }
