@@ -6,11 +6,11 @@ fn main() {
     let mut _file1 = None;
     let mut _file2 = None;
 
-    // TODO ADD SUPPORT FOR OUTPUT PATH
     let mut write_to_disk = false;
     let mut write_json = false;
     
-    let mut output = "output.gif";
+    let mut output : String = String::from("output.gif");
+    let mut output_dir: String  = String::from("");
 
     let mut frame : f32 = 10.0;
     let mut t : f32 = 100.0 / 10.0;
@@ -44,9 +44,9 @@ fn main() {
             match arg.as_str() {
                 "-o" => {
                     if args.len() > i + 1 {
-                        output = args[i + 1].as_str();
+                        output = args[i + 1].clone();
                     } else {
-                        eprintln!("Missing output path. Ex : fade image1.jpg image2.jpg -o output.gif");
+                        eprintln!("Error : Missing output path. Ex : fade image1.jpg image2.jpg -o output.gif");
                         std::process::exit(-1);
                     }
                 },
@@ -56,7 +56,7 @@ fn main() {
                         frame =  args[i + 1].parse::<f32>().unwrap();
                         t = 100.0 / frame;
                     } else {
-                        eprintln!("Missing number of frames. Ex : fade image1.jpg image2.jpg -n 20 will produce a gif with 20 frames per images.");
+                        eprintln!("Error : Missing number of frames. Ex : fade image1.jpg image2.jpg -n 20 will produce a gif with 20 frames per images.");
                         std::process::exit(-1);
                     }
                 },
@@ -64,7 +64,7 @@ fn main() {
                     if args.len() > i + 1 {
                         conversion_speed =  args[i + 1].parse::<i32>().unwrap();
                     } else {
-                        eprintln!("Missing speed of conversion. Ex : fade image1.jpg image2.jpg -s 30");
+                        eprintln!("Error : Missing speed of conversion. Ex : fade image1.jpg image2.jpg -s 30");
                         std::process::exit(-1);
                     }
                 },
@@ -74,7 +74,7 @@ fn main() {
                         resize_width =  Some(args[i + 1].parse::<u32>().unwrap());
                         resize_height = Some(args[i + 2].parse::<u32>().unwrap())
                     } else {
-                        eprintln!("Missing resize width and height. Ex : fade image1.jpg image2.jpg -r 320 180");
+                        eprintln!("Error : Missing resize width and height. Ex : fade image1.jpg image2.jpg -r 320 180");
                         std::process::exit(-1);
                     }
                 },
@@ -87,7 +87,7 @@ fn main() {
     let file1 : &str = match _file1 {
         Some(x) => x,
         None => {
-            eprintln!("File 1 must be set");
+            eprintln!("Error : File 1 must be set");
             std::process::exit(-1);
         },
     };
@@ -95,7 +95,7 @@ fn main() {
     let file2 : &str = match _file2 {
         Some(x) => x,
         None => {
-            eprintln!("File 2 must be set"); 
+            eprintln!("Error : File 2 must be set"); 
             std::process::exit(-1);
         },
     };
@@ -104,10 +104,26 @@ fn main() {
         eprintln!("Warning : You write duration to disk but not frames ?");
     }
 
+    if output != "output.gif" {
+        output = output.replace("\\", "/");
+        if output.ends_with("/") {
+            output_dir = output;
+            output = format!("{}output.gif", output_dir);
+            //output = format!("{}output.gif", outputDir).to_string()
+        } else if output.contains("/") {
+            let p : Vec<&str> = output.split("/").collect();
+            output_dir = p[0..p.len() - 1].join("/");
+            output_dir.push('/');
+        }
+    }
+
     print!("Parameters :\n");
     print!("\tFile 1 : {}\n", file1);
     print!("\tFile 2 : {}\n", file2);
     print!("\tOutput : {}\n", output);
+    if output_dir != "" {
+        print!("\tOutput directory : {}\n", output_dir);
+    }
     print!("\tTotal of frames : {}, with a delay of : {}ms\n", frame, t);
     print!("\tWrite frames to disk : {}\n", write_to_disk);
     print!("\tWrite .json for apngasm : {}\n", write_json);
@@ -139,6 +155,17 @@ fn main() {
         }
     }
 
+    if output_dir != "" {
+        let path = std::path::Path::new(&output_dir);
+        if !path.exists() {
+            std::fs::create_dir(path).unwrap_or_else(|error| {
+                eprintln!("Error when creating file : {}", error);
+                std::process::exit(-1);
+            });
+            println!("Created {} directory", output_dir);
+        }
+    }
+
     let mut img1 : DynamicImage = image::open(file1).unwrap_or_else(|error| {
         eprintln!("Error when decoding img1 : {}", error);
         std::process::exit(-1);
@@ -156,7 +183,7 @@ fn main() {
     }
 
     if write_to_disk {
-        let img_file1 = std::fs::File::create("0000.png").unwrap_or_else(|error| {
+        let img_file1 = std::fs::File::create(format!("{}0000.png", output_dir)).unwrap_or_else(|error| {
             eprintln!("Error when creating file : {}", error);
             std::process::exit(-1);
         });
@@ -166,7 +193,7 @@ fn main() {
             std::process::exit(-1);
         });
 
-        let img_file2 = std::fs::File::create(format!("{:04}.png", frame)).unwrap_or_else(|error| {
+        let img_file2 = std::fs::File::create(format!("{}{:04}.png", output_dir, frame)).unwrap_or_else(|error| {
             eprintln!("Error when creating file : {}", error);
             std::process::exit(-1);
         });
@@ -178,7 +205,7 @@ fn main() {
     }
 
     if write_json{
-        let mut json_file : File = File::create("output.json").unwrap_or_else(|error| {
+        let mut json_file : File = File::create(format!("{}animation.json", output_dir)).unwrap_or_else(|error| {
             eprintln!("Error when creating file : {}", error);
             std::process::exit(-1);
         });
@@ -256,7 +283,7 @@ fn main() {
             }
         }
         if write_to_disk {
-            let img_file1 = std::fs::File::create(format!("{:04}.png", alpha)).unwrap_or_else(|error| {
+            let img_file1 = std::fs::File::create(format!("{}{:04}.png", output_dir, alpha)).unwrap_or_else(|error| {
                 eprintln!("Error when creating file : {}", error);
                 std::process::exit(-1);
             });
@@ -266,7 +293,7 @@ fn main() {
                 std::process::exit(-1);
             });
 
-            let img_file2 = std::fs::File::create(format!("{:04}.png", frame + frame - alpha as f32)).unwrap_or_else(|error| {
+            let img_file2 = std::fs::File::create(format!("{}{:04}.png", output_dir, frame + frame - alpha as f32)).unwrap_or_else(|error| {
                 eprintln!("Error when creating file : {}", error);
                 std::process::exit(-1);
             });
