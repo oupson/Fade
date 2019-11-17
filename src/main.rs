@@ -46,7 +46,8 @@ fn main() {
                     if args.len() > i + 1 {
                         output = args[i + 1].as_str();
                     } else {
-                        panic!("Missing output path");
+                        eprintln!("Missing output path. Ex : fade image1.jpg image2.jpg -o output.gif");
+                        std::process::exit(-1);
                     }
                 },
                 "-w" => write_to_disk = true,
@@ -55,14 +56,16 @@ fn main() {
                         frame =  args[i + 1].parse::<f32>().unwrap();
                         t = 100.0 / frame;
                     } else {
-                        panic!("Missing arg for number of frames");
+                        eprintln!("Missing number of frames. Ex : fade image1.jpg image2.jpg -n 20 will produce a gif with 20 frames per images.");
+                        std::process::exit(-1);
                     }
                 },
                 "-s" => {
                     if args.len() > i + 1 {
                         conversion_speed =  args[i + 1].parse::<i32>().unwrap();
                     } else {
-                        panic!("Missing arg for conversion speed");
+                        eprintln!("Missing speed of conversion. Ex : fade image1.jpg image2.jpg -s 30");
+                        std::process::exit(-1);
                     }
                 },
                 "-r" => {
@@ -71,7 +74,8 @@ fn main() {
                         resize_width =  Some(args[i + 1].parse::<u32>().unwrap());
                         resize_height = Some(args[i + 2].parse::<u32>().unwrap())
                     } else {
-                        panic!("Missing arg for conversion speed");
+                        eprintln!("Missing resize width and height. Ex : fade image1.jpg image2.jpg -r 320 180");
+                        std::process::exit(-1);
                     }
                 },
                 "-a" => write_json = true,
@@ -208,7 +212,6 @@ fn main() {
         eprint!("Error : Images doesn't have the same dimension");
         std::process::exit(-1);
     }
-
 
     let mut output_file = std::fs::File::create(output).unwrap_or_else(|error| {
         eprintln!("Error when creating file : {}", error);
