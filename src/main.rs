@@ -12,7 +12,9 @@ fn main() {
     let mut output : String = String::from("output.gif");
     let mut output_dir: String  = String::from("");
 
-    let mut frame : f32 = 10.0;
+    // TODO Rename frame_count or similar
+    let mut frame : u32 = 10;
+    // TODO On ms
     let mut t : f32 = 100.0 / 10.0;
 
     let mut resize = false;
@@ -53,8 +55,8 @@ fn main() {
                 "-w" => write_to_disk = true,
                 "-n" => {
                     if args.len() > i + 1 {
-                        frame =  args[i + 1].parse::<f32>().unwrap();
-                        t = 100.0 / frame;
+                        frame =  args[i + 1].parse::<u32>().unwrap();
+                        t = 100.0 / frame as f32;
                     } else {
                         eprintln!("Error : Missing number of frames. Ex : fade image1.jpg image2.jpg -n 20 will produce a gif with 20 frames per images.");
                         std::process::exit(-1);
@@ -212,14 +214,14 @@ fn main() {
         let mut json = String::new();
         json.push_str("{\n\t\"name\": \"output\",\n\t\"loops\": 0,\n\t\"skip_first\": false,\n\t\"frames\": [\n");
         json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", 0, 1000).as_str());
-        for i in 1..frame as u32 {
+        for i in 1..frame {
             json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", i, t * 10.0).as_str());
         }
         json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", frame, 1000).as_str());
-        for i in 1..(frame - 1.0) as u32 {
-            json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", frame + i as f32, t * 10.0).as_str());
+        for i in 1..(frame - 1) {
+            json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", frame + i, t * 10.0).as_str());
         }
-        json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}}\n", frame + frame - 1.0, t * 10.0).as_str());
+        json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}}\n", frame + frame - 1, t * 10.0).as_str());
         json.push_str("\t]\n");
         json.push_str("}");
         json_file.write(json.as_bytes()).unwrap();
@@ -265,13 +267,15 @@ fn main() {
     frame2.delay = 100;
     frames[frame as usize] = frame2;
 
+    // TODO RGBA
     for alpha in 1..(frame as u32)  {
         print!("\rGenrating frame {:04} out of {:04}", alpha + 1, frame);
         io::stdout().flush().ok().expect("Could not flush stdout");
 
         let mut img = DynamicImage::new_rgb8(img1.width(), img1.height());
-        let a = ((1.0 - (alpha as f32 / frame)) * 255.0) as u32;
-        
+        // let a = ((1.0 - (alpha as f32 / frame)) * 255.0) as u32;
+        let a = 0xff - (alpha * 0xff) / frame;
+
         for x in 0..img1.width() {
             for y in 0..img1.height() {
                 let mut pixel1 = img1.get_pixel(x, y);
@@ -295,7 +299,7 @@ fn main() {
                 std::process::exit(-1);
             });
 
-            let img_file2 = std::fs::File::create(format!("{}{:04}.png", output_dir, frame + frame - alpha as f32)).unwrap_or_else(|error| {
+            let img_file2 = std::fs::File::create(format!("{}{:04}.png", output_dir, frame + frame - alpha)).unwrap_or_else(|error| {
                 eprintln!("Error when creating file : {}", error);
                 std::process::exit(-1);
             });
@@ -309,7 +313,7 @@ fn main() {
         let mut f = Frame::from_rgb_speed(img1.width() as u16, img1.height() as u16, &mut *img.raw_pixels(), conversion_speed);
         f.delay = t as u16;
         frames[alpha as usize] = Clone::clone(&f);
-        frames[(frame + frame - alpha as f32) as usize] = f;
+        frames[(frame + frame - alpha) as usize] = f;
     }
 
     println!("\nEncoding gif ... ");
