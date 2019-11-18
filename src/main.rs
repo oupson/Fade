@@ -270,15 +270,17 @@ fn main() {
         io::stdout().flush().ok().expect("Could not flush stdout");
 
         let mut img = DynamicImage::new_rgb8(img1.width(), img1.height());
-        let a = 1.0 - (alpha as f32/frame);
+        let a = ((1.0 - (alpha as f32 / frame)) * 255.0) as u32;
+        
         for x in 0..img1.width() {
             for y in 0..img1.height() {
                 let mut pixel1 = img1.get_pixel(x, y);
                 let pixel2 = img2.get_pixel(x, y);
 
-                pixel1[0] = (((pixel1[0] as f32 / 255.0)*a + (pixel2[0] as f32/255.0)*(1.0-a)) * 255.0) as u8;
-                pixel1[1] = (((pixel1[1] as f32/255.0)*a + (pixel2[1] as f32/255.0)*(1.0-a)) * 255.0) as u8;
-                pixel1[2] = (((pixel1[2] as f32/255.0)*a + (pixel2[2] as f32/255.0)*(1.0-a)) * 255.0) as u8;
+                pixel1[0] = ((pixel1[0] as u32 * a + pixel2[0] as u32 * (0xff - a)) / 0xff) as u8;
+                pixel1[1] = ((pixel1[1] as u32 * a + pixel2[1] as u32 * (0xff - a)) / 0xff) as u8;
+                pixel1[2] = ((pixel1[2] as u32 * a + pixel2[2] as u32 * (0xff - a)) / 0xff) as u8;
+                
                 img.put_pixel(x, y, pixel1);
             }
         }
