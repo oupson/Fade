@@ -4,6 +4,7 @@ use std::{io, io::Write, fs::File};
 
 const RGBA : image::ColorType = image::ColorType::RGBA(8);
 
+// TODO Add support for more than 2 images
 fn main() {
     let mut _file1 = None;
     let mut _file2 = None;
@@ -206,25 +207,12 @@ fn main() {
         });
     }
 
-    if write_json{
-        let mut json_file : File = File::create(format!("{}animation.json", output_dir)).unwrap_or_else(|error| {
-            eprintln!("Error when creating file : {}", error);
+    if write_json {
+        write_json_to_disk(&output_dir, &frame_count, &frame_duration).unwrap_or_else(|error| {
+            eprintln!("Error when writing json : {}", error);
             std::process::exit(-1);
         });
-        let mut json = String::new();
-        json.push_str("{\n\t\"name\": \"output\",\n\t\"loops\": 0,\n\t\"skip_first\": false,\n\t\"frames\": [\n");
-        json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", 0, 1000).as_str());
-        for i in 1..frame_count {
-            json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", i, frame_duration).as_str());
-        }
-        json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", frame_count, 1000).as_str());
-        for i in 1..(frame_count - 1) {
-            json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", frame_count + i, frame_duration).as_str());
-        }
-        json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}}\n", frame_count + frame_count - 1, frame_duration).as_str());
-        json.push_str("\t]\n");
-        json.push_str("}");
-        json_file.write(json.as_bytes()).unwrap();
+        println!("Writed json to disk");
     }
 
     if img1.width() > std::u16::MAX.into() {
@@ -254,8 +242,6 @@ fn main() {
 
     encoder.set(Repeat::Infinite).unwrap();
 
-    let mut frames : Vec<Frame> = Vec::with_capacity((frame_count + frame_count) as usize);
-
     println!("Converting Frame 1"); 
     let mut frame1 : Frame;
     if img1.color() == RGBA {
@@ -264,8 +250,8 @@ fn main() {
         frame1 = Frame::from_rgb_speed(img1.width() as u16, img1.height() as u16, &mut *img1.raw_pixels(), conversion_speed);
     };
     frame1.delay = 100;
-
-    frames.resize((frame_count + frame_count) as usize, frame1);
+    
+    let mut frames : Vec<Frame> = vec![frame1; (frame_count + frame_count) as usize];
 
     println!("Converting Frame {}", frame_count);
     let mut frame2 : Frame;
@@ -382,4 +368,30 @@ fn main() {
         encoder.write_frame(&f).unwrap();
     }
     println!("\nDone !");
+}
+
+fn write_json_to_disk(output_dir : &String, frame_count : &u32, frame_duration : &f32) -> Result<(), io::Error> {
+    let json_file = File::create(format!("{}animation.json", output_dir));
+    let mut json_file = match json_file {
+        Ok(file) => file,
+        Err(err) => return Err(err),
+    };
+    let mut json = String::new();
+    json.push_str("{\n\t\"name\": \"output\",\n\t\"loops\": 0,\n\t\"skip_first\": false,\n\t\"frames\": [\n");
+    json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", 0, 1000).as_str());
+    for i in 1..*frame_count {
+        json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", i, frame_duration).as_str());
+    }
+    json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", frame_count, 1000).as_str());
+    for i in 1..(*frame_count - 1) {
+        json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", frame_count + i, frame_duration).as_str());
+    }
+    json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}}\n", frame_count + frame_count - 1, frame_duration).as_str());
+    json.push_str("\t]\n");
+    json.push_str("}");
+    let writed = json_file.write(json.as_bytes());
+    match writed {
+        Ok(_) => return Ok(()),
+        Err(x) => return Err(x),
+    }
 }
