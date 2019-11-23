@@ -94,6 +94,24 @@ fn main() {
         }
     }
     
+    if images.len() == 0 {
+        eprintln!("No images provided !");
+        std::process::exit(-1);
+    } else if images.len() == 1 {
+        if images[0].contains("*") {
+            let end_name = images[0].replace("*", "");
+            images.clear();
+            let current_dir = std::env::current_dir().unwrap();
+            for f in std::fs::read_dir(current_dir).unwrap() {
+                let entry : std::fs::DirEntry = f.unwrap();
+                let name = entry.file_name().into_string().unwrap();
+                if name.ends_with(end_name.as_str()) {
+                    images.push(name);
+                }
+            }
+        }
+    }
+
     if !write_to_disk && write_json {
         eprintln!("Warning : You write apngasm json to disk but not frames ?");
     }
@@ -206,6 +224,7 @@ fn main() {
 
         image_list.push(img)
     }
+    println!();
     
     let mut output_file = std::fs::File::create(output).unwrap_or_else(|error| {
         eprintln!("Error when creating file : {}", error);
