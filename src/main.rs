@@ -4,11 +4,7 @@ use std::{io, io::Write, fs::File};
 
 const RGBA : image::ColorType = image::ColorType::RGBA(8);
 
-// TODO Add support for more than 2 images
 fn main() {
-    let mut _file1 = None;
-    let mut _file2 = None;
-
     let mut write_to_disk = false;
     let mut write_json = false;
     
@@ -26,6 +22,9 @@ fn main() {
 
     let args : Vec<String> = std::env::args().collect();
 
+    let mut is_images_arg = true;
+    let mut images : Vec<String> = Vec::new();
+
     if args.len() == 1 {
         println!("Usage : fade <file 1> <file 2> [options]");
         println!("Options :");
@@ -39,72 +38,64 @@ fn main() {
     }
     
     for (i, arg) in args.iter().enumerate() {
-        if i == 1 {
-            _file1 = Some(arg.as_str());
-        } else if i == 2 {
-            _file2 = Some(arg.as_str());
-        } else {
-            match arg.as_str() {
-                "-o" => {
-                    if args.len() > i + 1 {
-                        output = args[i + 1].clone();
-                    } else {
-                        eprintln!("Error : Missing output path. Ex : fade image1.jpg image2.jpg -o output.gif");
-                        std::process::exit(-1);
-                    }
-                },
-                "-w" => write_to_disk = true,
-                "-n" => {
-                    if args.len() > i + 1 {
-                        frame_count =  args[i + 1].parse::<u32>().unwrap();
-                        frame_duration = 1000.0 / frame_count as f32;
-                    } else {
-                        eprintln!("Error : Missing number of frames. Ex : fade image1.jpg image2.jpg -n 20 will produce a gif with 20 frames per images.");
-                        std::process::exit(-1);
-                    }
-                },
-                "-s" => {
-                    if args.len() > i + 1 {
-                        conversion_speed =  args[i + 1].parse::<i32>().unwrap();
-                    } else {
-                        eprintln!("Error : Missing speed of conversion. Ex : fade image1.jpg image2.jpg -s 30");
-                        std::process::exit(-1);
-                    }
-                },
-                "-r" => {
-                    if args.len() > i + 2 {
-                        resize = true;
-                        resize_width =  Some(args[i + 1].parse::<u32>().unwrap());
-                        resize_height = Some(args[i + 2].parse::<u32>().unwrap())
-                    } else {
-                        eprintln!("Error : Missing resize width and height. Ex : fade image1.jpg image2.jpg -r 320 180");
-                        std::process::exit(-1);
-                    }
-                },
-                "-a" => write_json = true,
-                _ => continue,
-            }
+        match arg.as_str() {
+            "-o" => {
+                if args.len() > i + 1 {
+                    output = args[i + 1].clone();
+                } else {
+                    eprintln!("Error : Missing output path. Ex : fade image1.jpg image2.jpg -o output.gif");
+                    std::process::exit(-1);
+                }
+                is_images_arg = false;
+            },
+            "-w" => {
+                write_to_disk = true; 
+                is_images_arg = false;
+            },
+            "-n" => {
+                if args.len() > i + 1 {
+                    frame_count =  args[i + 1].parse::<u32>().unwrap();
+                    frame_duration = 1000.0 / frame_count as f32;
+                } else {
+                    eprintln!("Error : Missing number of frames. Ex : fade image1.jpg image2.jpg -n 20 will produce a gif with 20 frames per images.");
+                    std::process::exit(-1);
+                }
+                is_images_arg = false;
+            },
+            "-s" => {
+                if args.len() > i + 1 {
+                    conversion_speed =  args[i + 1].parse::<i32>().unwrap();
+                } else {
+                    eprintln!("Error : Missing speed of conversion. Ex : fade image1.jpg image2.jpg -s 30");
+                    std::process::exit(-1);
+                }
+                is_images_arg = false;
+            },
+            "-r" => {
+                if args.len() > i + 2 {
+                    resize = true;
+                    resize_width =  Some(args[i + 1].parse::<u32>().unwrap());
+                    resize_height = Some(args[i + 2].parse::<u32>().unwrap())
+                } else {
+                    eprintln!("Error : Missing resize width and height. Ex : fade image1.jpg image2.jpg -r 320 180");
+                    std::process::exit(-1);
+                }
+                is_images_arg = false;
+            },
+            "-a" => {
+                write_json = true; 
+                is_images_arg = false;
+            },
+            _ => {
+                if is_images_arg && i > 0 {
+                    images.push(arg.to_string());
+                }
+            },
         }
     }
-
-    let file1 : &str = match _file1 {
-        Some(x) => x,
-        None => {
-            eprintln!("Error : File 1 must be set");
-            std::process::exit(-1);
-        },
-    };
-
-    let file2 : &str = match _file2 {
-        Some(x) => x,
-        None => {
-            eprintln!("Error : File 2 must be set"); 
-            std::process::exit(-1);
-        },
-    };
-
+    
     if !write_to_disk && write_json {
-        eprintln!("Warning : You write duration to disk but not frames ?");
+        eprintln!("Warning : You write apngasm json to disk but not frames ?");
     }
 
     if output != "output.gif" {
@@ -112,7 +103,6 @@ fn main() {
         if output.ends_with("/") {
             output_dir = output;
             output = format!("{}output.gif", output_dir);
-            //output = format!("{}output.gif", outputDir).to_string()
         } else if output.contains("/") {
             let p : Vec<&str> = output.split("/").collect();
             output_dir = p[0..p.len() - 1].join("/");
@@ -121,8 +111,7 @@ fn main() {
     }
 
     print!("Parameters :\n");
-    print!("\tFile 1 : {}\n", file1);
-    print!("\tFile 2 : {}\n", file2);
+    print!("\tImages  : {}\n", images.join(", "));
     print!("\tOutput : {}\n", output);
     if output_dir != "" {
         print!("\tOutput directory : {}\n", output_dir);
@@ -138,26 +127,6 @@ fn main() {
     }
     io::stdout().flush().ok().expect("Could not flush stdout");
 
-    {
-        let path1 = std::path::Path::new(file1);
-        if !path1.exists() {
-            eprintln!("Error : File 1 ({}) doesn't exist !", file1);
-            std::process::exit(-1)
-        } else if path1.is_dir() {
-            eprintln!("Error File 1 ({}) is a directory", file1);
-            std::process::exit(-1);
-        }
-
-        let path2 = std::path::Path::new(file2);
-        if !path2.exists() {
-            eprintln!("Error : File 2 ({}) doesn't exist !", file2);
-            std::process::exit(-1)
-        } else if path2.is_dir() {
-            eprintln!("Error File 1 ({}) is a directory", file2);
-            std::process::exit(-1);
-        }
-    }
-
     if output_dir != "" {
         let path = std::path::Path::new(&output_dir);
         if !path.exists() {
@@ -169,44 +138,6 @@ fn main() {
         }
     }
 
-    let mut img1 : DynamicImage = image::open(file1).unwrap_or_else(|error| {
-        eprintln!("Error when decoding img1 : {}", error);
-        std::process::exit(-1);
-    });
-
-    let mut img2 : DynamicImage = image::open(file2).unwrap_or_else(|error| {
-        eprintln!("Error when decoding img2 : {}", error);
-        std::process::exit(-1);
-    });
-
-    if resize {
-        img1 = img1.resize_exact(resize_width.unwrap(), resize_height.unwrap(), image::imageops::FilterType::Nearest);
-
-        img2 = img2.resize_exact(resize_width.unwrap(), resize_height.unwrap(), image::imageops::FilterType::Nearest);
-    }
-
-    if write_to_disk {
-        let img_file1 = std::fs::File::create(format!("{}0000.png", output_dir)).unwrap_or_else(|error| {
-            eprintln!("Error when creating file : {}", error);
-            std::process::exit(-1);
-        });
-        let encoder1 = image::png::PNGEncoder::new(img_file1);
-        encoder1.encode(&mut *img1.raw_pixels(), img1.width(), img1.height(), img1.color()).unwrap_or_else(|error| {
-            eprintln!("Error when encoding file : {}", error);
-            std::process::exit(-1);
-        });
-
-        let img_file2 = std::fs::File::create(format!("{}{:04}.png", output_dir, frame_count)).unwrap_or_else(|error| {
-            eprintln!("Error when creating file : {}", error);
-            std::process::exit(-1);
-        });
-        let encoder2 = image::png::PNGEncoder::new(img_file2);
-        encoder2.encode(&mut *img2.raw_pixels(), img2.width(), img2.height(), img2.color()).unwrap_or_else(|error| {
-            eprintln!("Error when encoding file : {}", error);
-            std::process::exit(-1);
-        });
-    }
-
     if write_json {
         write_json_to_disk(&output_dir, &frame_count, &frame_duration).unwrap_or_else(|error| {
             eprintln!("Error when writing json : {}", error);
@@ -215,157 +146,179 @@ fn main() {
         println!("Writed json to disk");
     }
 
-    if img1.width() > std::u16::MAX.into() {
-        eprintln!("Error : Width must be <= at {}" , std::u16::MAX);
-        std::process::exit(-1);
-    }
+    let mut image_list : Vec<DynamicImage> = Vec::new();
 
-    if img1.height() > std::u16::MAX.into() {
-        eprintln!("Error : Height must be <= at {}" , std::u16::MAX);
-        std::process::exit(-1);
-    }
+    let mut width : u32 = 0;
+    let mut height : u32 = 0;
 
-    if img1.width() != img2.width() || img1.height() != img2.height() {
-        eprint!("Error : Images doesn't have the same dimension, {} x {}, {} x {}", img1.width(), img1.height(), img2.width(), img2.height());
-        std::process::exit(-1);
-    }
+    for (i, f) in images.iter().enumerate() {
+        println!("Opening {}", f);
+        let path = std::path::Path::new(f.as_str());
+        if !path.exists() {
+            eprintln!("Error : File {} doesn't exist !", f);
+            std::process::exit(-1)
+        } else if path.is_dir() {
+            eprintln!("Error File 1 {} is a directory", f);
+            std::process::exit(-1);
+        }
 
+        let mut img : DynamicImage = image::open(path).unwrap_or_else(|error| {
+            eprintln!("Error when decoding img1 : {}", error);
+            std::process::exit(-1);
+        });
+
+        if img.width() > std::u16::MAX.into() {
+            eprintln!("Error : Width must be <= at {}" , std::u16::MAX);
+            std::process::exit(-1);
+        }
+
+        if img.height() > std::u16::MAX.into() {
+            eprintln!("Error : Height must be <= at {}" , std::u16::MAX);
+            std::process::exit(-1);
+        }
+
+        if resize {
+            img = img.resize_exact(resize_width.unwrap(), resize_height.unwrap(), image::imageops::FilterType::Nearest);
+        }
+
+        if i == 0 {
+            width = img.width();
+            height = img.height();
+        } else {
+            if img.width() != width || img.height() != height {
+                eprint!("Error : Images doesn't have the same dimension, {} x {}, {} x {}", width, height, img.width(), img.height());
+                std::process::exit(-1);
+            }
+        }
+
+        if write_to_disk {
+            let img_file = std::fs::File::create(format!("{}{:04}.png", output_dir, frame_count as usize * i)).unwrap_or_else(|error| {
+                eprintln!("Error when creating file : {}", error);
+                std::process::exit(-1);
+            });
+
+            let encoder = image::png::PNGEncoder::new(img_file);
+            encoder.encode(&mut *img.raw_pixels(), img.width(), img.height(), img.color()).unwrap_or_else(|error| {
+                eprintln!("Error when encoding file : {}", error);
+                std::process::exit(-1);
+            });
+        }
+
+        image_list.push(img)
+    }
+    
     let mut output_file = std::fs::File::create(output).unwrap_or_else(|error| {
         eprintln!("Error when creating file : {}", error);
         std::process::exit(-1);
     });
 
-    let mut encoder = Encoder::new(&mut output_file, img1.width() as u16, img2.height() as u16, &[]).unwrap_or_else(|error| {
+    let mut encoder = Encoder::new(&mut output_file, width as u16, height as u16, &[]).unwrap_or_else(|error| {
         eprintln!("Error when creating encoder : {}", error);
         std::process::exit(-1);
     });
-
     encoder.set(Repeat::Infinite).unwrap();
-
-    println!("Converting Frame 1"); 
-    let mut frame1 : Frame;
-    if img1.color() == RGBA {
-        frame1 = Frame::from_rgba_speed(img1.width() as u16, img1.height() as u16, &mut *img1.raw_pixels(), conversion_speed);
-    } else {
-        frame1 = Frame::from_rgb_speed(img1.width() as u16, img1.height() as u16, &mut *img1.raw_pixels(), conversion_speed);
-    };
-    frame1.delay = 100;
     
-    let mut frames : Vec<Frame> = vec![frame1; (frame_count + frame_count) as usize];
+    let lenght_list = image_list.len();
 
-    println!("Converting Frame {}", frame_count);
-    let mut frame2 : Frame;
-    if img2.color() == RGBA {
-        frame2 = Frame::from_rgba_speed(img2.width() as u16, img2.height() as u16, &mut *img2.raw_pixels(), conversion_speed);
-    } else {
-        frame2 = Frame::from_rgb_speed(img2.width() as u16, img2.height() as u16, &mut *img2.raw_pixels(), conversion_speed);
-    };
-    frame2.delay = 100;
-    frames[frame_count as usize] = frame2;
+    for i in 0..lenght_list {
+        let img1 = &image_list[i];
+        print!("\rGenrating frame {:04} out of {:04}", frame_count * i as u32 + 1, frame_count * lenght_list as u32);
+        io::stdout().flush().ok().expect("Could not flush stdout");        
 
-    if img1.color() == RGBA || img2.color() == RGBA {
-        for alpha in 1..(frame_count as u32)  {
-            print!("\rGenrating frame {:04} out of {:04}", alpha + 1, frame_count);
-            io::stdout().flush().ok().expect("Could not flush stdout");
-            let mut img = DynamicImage::new_rgba8(img1.width(), img1.height());
-            let a = 0xff - (alpha * 0xff) / frame_count;
-
-            for x in 0..img1.width() {
-                for y in 0..img1.height() {
-                    let mut pixel1 = img1.get_pixel(x, y);
-                    let pixel2 = img2.get_pixel(x, y);
-
-                    pixel1[0] = ((pixel1[0] as u32 * pixel1[3] as u32 * a + pixel2[0] as u32 * pixel2[3] as u32 * (0xff - a)) / 0xfe01) as u8;
-                    pixel1[1] = ((pixel1[1] as u32 * pixel1[3] as u32 * a + pixel2[1] as u32 * pixel2[3] as u32 * (0xff - a)) / 0xfe01) as u8;
-                    pixel1[2] = ((pixel1[2] as u32 * pixel1[3] as u32 * a + pixel2[2] as u32 * pixel2[3] as u32 * (0xff - a)) / 0xfe01) as u8;
-                    pixel1[3] = ((pixel1[3] as u32 * a + pixel2[3] as u32 * (0xff - a as u32)) / 0xff) as u8;
-
-                    img.put_pixel(x, y, pixel1);
-                }
-            }
-
-            if write_to_disk {
-                let img_file1 = std::fs::File::create(format!("{}{:04}.png", output_dir, alpha)).unwrap_or_else(|error| {
-                    eprintln!("Error when creating file : {}", error);
-                    std::process::exit(-1);
-                });
-                let encoder1 = image::png::PNGEncoder::new(img_file1);
-                encoder1.encode(&mut *img.raw_pixels(), img.width(), img.height(), img.color()).unwrap_or_else(|error| {
-                    eprintln!("Error when encoding file : {}", error);
-                    std::process::exit(-1);
-                });
-
-                let img_file2 = std::fs::File::create(format!("{}{:04}.png", output_dir, frame_count + frame_count - alpha)).unwrap_or_else(|error| {
-                    eprintln!("Error when creating file : {}", error);
-                    std::process::exit(-1);
-                });
-                let encoder2 = image::png::PNGEncoder::new(img_file2);
-                encoder2.encode(&mut *img.raw_pixels(), img.width(), img.height(), img.color()).unwrap_or_else(|error| {
-                    eprintln!("Error when encoding file : {}", error);
-                    std::process::exit(-1);
-                });
-            }
-            let mut f = Frame::from_rgba_speed(img1.width() as u16, img1.height() as u16, &mut *img.raw_pixels(), conversion_speed);
-            f.delay = (frame_duration / 10.0) as u16;
-            frames[alpha as usize] = Clone::clone(&f);
-            frames[(frame_count + frame_count - alpha) as usize] = f;
+        {
+            let mut frame1 : Frame;
+            if img1.color() == RGBA {
+                frame1 = Frame::from_rgba_speed(width as u16, height as u16, &mut *img1.raw_pixels(), conversion_speed);
+            } else {
+                frame1 = Frame::from_rgb_speed(width as u16, height as u16, &mut *img1.raw_pixels(), conversion_speed);
+            };
+            frame1.delay = 100;
+            encoder.write_frame(&frame1).unwrap()
         }
-    } else {
-        for alpha in 1..(frame_count as u32)  {
-            print!("\rGenrating frame {:04} out of {:04}", alpha + 1, frame_count);
-            io::stdout().flush().ok().expect("Could not flush stdout");
 
-            let mut img = DynamicImage::new_rgb8(img1.width(), img1.height());
-            let a = 0xff - (alpha * 0xff) / frame_count;
-
-            for x in 0..img1.width() {
-                for y in 0..img1.height() {
-                    let mut pixel1 = img1.get_pixel(x, y);
-                    let pixel2 = img2.get_pixel(x, y);
-
-                    pixel1[0] = ((pixel1[0] as u32 * a + pixel2[0] as u32 * (0xff - a)) / 0xff) as u8;
-                    pixel1[1] = ((pixel1[1] as u32 * a + pixel2[1] as u32 * (0xff - a)) / 0xff) as u8;
-                    pixel1[2] = ((pixel1[2] as u32 * a + pixel2[2] as u32 * (0xff - a)) / 0xff) as u8;
-                    
-                    img.put_pixel(x, y, pixel1);
-                }
-            }
-
-            if write_to_disk {
-                let img_file1 = std::fs::File::create(format!("{}{:04}.png", output_dir, alpha)).unwrap_or_else(|error| {
-                    eprintln!("Error when creating file : {}", error);
-                    std::process::exit(-1);
-                });
-                let encoder1 = image::png::PNGEncoder::new(img_file1);
-                encoder1.encode(&mut *img.raw_pixels(), img.width(), img.height(), img.color()).unwrap_or_else(|error| {
-                    eprintln!("Error when encoding file : {}", error);
-                    std::process::exit(-1);
-                });
-
-                let img_file2 = std::fs::File::create(format!("{}{:04}.png", output_dir, frame_count + frame_count - alpha)).unwrap_or_else(|error| {
-                    eprintln!("Error when creating file : {}", error);
-                    std::process::exit(-1);
-                });
-                let encoder2 = image::png::PNGEncoder::new(img_file2);
-                encoder2.encode(&mut *img.raw_pixels(), img.width(), img.height(), img.color()).unwrap_or_else(|error| {
-                    eprintln!("Error when encoding file : {}", error);
-                    std::process::exit(-1);
-                });
-            }
-            
-            let mut f = Frame::from_rgb_speed(img1.width() as u16, img1.height() as u16, &mut *img.raw_pixels(), conversion_speed);
-            f.delay = (frame_duration / 10.0) as u16;
-            frames[alpha as usize] = Clone::clone(&f);
-            frames[(frame_count + frame_count - alpha) as usize] = f;
+        let img2 : &DynamicImage;
+        if i == (lenght_list - 1) {
+            img2 = &image_list[0];
+        } else {
+            img2 = &image_list[i + 1];
         }
-    }
 
-    println!("\nEncoding gif ... ");
+        if img1.color() == RGBA || img2.color() == RGBA {
+            for alpha in 1..(frame_count as u32)  {
+                print!("\rGenrating frame {:04} out of {:04}", frame_count * i as u32 + alpha + 1, frame_count * lenght_list as u32);
+                io::stdout().flush().ok().expect("Could not flush stdout");
 
-    for (i, f) in frames.iter().enumerate() {
-        print!("\rWriting frame {:04} out of {:04}", i + 1, frames.len());
-        io::stdout().flush().ok().expect("Could not flush stdout");
-        encoder.write_frame(&f).unwrap();
+                let mut img = DynamicImage::new_rgba8(img1.width(), img1.height());
+                let a = 0xff - (alpha * 0xff) / frame_count;
+
+                for x in 0..img1.width() {
+                    for y in 0..img1.height() {
+                        let mut pixel1 = img1.get_pixel(x, y);
+                        let pixel2 = img2.get_pixel(x, y);
+
+                        pixel1[0] = ((pixel1[0] as u32 * pixel1[3] as u32 * a + pixel2[0] as u32 * pixel2[3] as u32 * (0xff - a)) / 0xfe01) as u8;
+                        pixel1[1] = ((pixel1[1] as u32 * pixel1[3] as u32 * a + pixel2[1] as u32 * pixel2[3] as u32 * (0xff - a)) / 0xfe01) as u8;
+                        pixel1[2] = ((pixel1[2] as u32 * pixel1[3] as u32 * a + pixel2[2] as u32 * pixel2[3] as u32 * (0xff - a)) / 0xfe01) as u8;
+                        pixel1[3] = ((pixel1[3] as u32 * a + pixel2[3] as u32 * (0xff - a as u32)) / 0xff) as u8;
+
+                        img.put_pixel(x, y, pixel1);
+                    }
+                }
+
+                if write_to_disk {
+                    let img_file1 = std::fs::File::create(format!("{}{:04}.png", output_dir, frame_count * i as u32 + alpha)).unwrap_or_else(|error| {
+                        eprintln!("Error when creating file : {}", error);
+                        std::process::exit(-1);
+                    });
+                    let encoder1 = image::png::PNGEncoder::new(img_file1);
+                    encoder1.encode(&mut *img.raw_pixels(), img.width(), img.height(), img.color()).unwrap_or_else(|error| {
+                        eprintln!("Error when encoding file : {}", error);
+                        std::process::exit(-1);
+                    });
+                }
+
+                let mut f = Frame::from_rgba_speed(img1.width() as u16, img1.height() as u16, &mut *img.raw_pixels(), conversion_speed);
+                f.delay = (frame_duration / 10.0) as u16;
+                encoder.write_frame(&f).unwrap();
+            }
+        } else {
+            for alpha in 1..(frame_count as u32)  {
+                print!("\rGenrating frame {:04} out of {:04}", frame_count * i as u32 + alpha + 1, frame_count * lenght_list as u32);
+                io::stdout().flush().ok().expect("Could not flush stdout");
+
+                let mut img = DynamicImage::new_rgb8(img1.width(), img1.height());
+                let a = 0xff - (alpha * 0xff) / frame_count;
+
+                for x in 0..img1.width() {
+                    for y in 0..img1.height() {
+                        let mut pixel1 = img1.get_pixel(x, y);
+                        let pixel2 = img2.get_pixel(x, y);
+
+                        pixel1[0] = ((pixel1[0] as u32 * a + pixel2[0] as u32 * (0xff - a)) / 0xff) as u8;
+                        pixel1[1] = ((pixel1[1] as u32 * a + pixel2[1] as u32 * (0xff - a)) / 0xff) as u8;
+                        pixel1[2] = ((pixel1[2] as u32 * a + pixel2[2] as u32 * (0xff - a)) / 0xff) as u8;
+                        
+                        img.put_pixel(x, y, pixel1);
+                    }
+                }
+
+                if write_to_disk {
+                    let img_file1 = std::fs::File::create(format!("{}{:04}.png", output_dir, frame_count * i as u32 + alpha)).unwrap_or_else(|error| {
+                        eprintln!("Error when creating file : {}", error);
+                        std::process::exit(-1);
+                    });
+                    let encoder1 = image::png::PNGEncoder::new(img_file1);
+                    encoder1.encode(&mut *img.raw_pixels(), img.width(), img.height(), img.color()).unwrap_or_else(|error| {
+                        eprintln!("Error when encoding file : {}", error);
+                        std::process::exit(-1);
+                    });
+                }
+                
+                let mut f = Frame::from_rgb_speed(img1.width() as u16, img1.height() as u16, &mut *img.raw_pixels(), conversion_speed);
+                f.delay = (frame_duration / 10.0) as u16;
+                encoder.write_frame(&f).unwrap();
+            }
+        }
     }
     println!("\nDone !");
 }
