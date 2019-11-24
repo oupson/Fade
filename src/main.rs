@@ -37,6 +37,9 @@ fn main() {
         println!("\t-d <important> <standard> Set durations of frame in ms");
         println!("\t-s <speed> Set gif conversion speed. Must be between 1 and 30, 30 is loss quality but faster.");
         println!("\t-r <width> <height> Resize image.");
+        println!("\nExamples :");
+        println!("\tfade image1.jpg image2.jpg will create an animation from the 2 images");
+        println!("\tfade *.png -o o.gif -n 50 will take every images in the directory that end with .png, output the result to o.gif and with 50 frames per images");
         std::process::exit(0);
     }
     
@@ -260,7 +263,7 @@ fn main() {
 
     for i in 0..lenght_list {
         let img1 = &image_list[i];
-        print!("\rGenrating frame {:04} out of {:04}", frame_count * i as u32 + 1, frame_count * lenght_list as u32);
+        print!("\rCreating and writing frame {:04} out of {:04}", frame_count * i as u32 + 1, frame_count * lenght_list as u32);
         io::stdout().flush().ok().expect("Could not flush stdout");        
 
         {
@@ -283,7 +286,7 @@ fn main() {
 
         if img1.color() == RGBA || img2.color() == RGBA {
             for alpha in 1..(frame_count as u32)  {
-                print!("\rGenrating frame {:04} out of {:04}", frame_count * i as u32 + alpha + 1, frame_count * lenght_list as u32);
+                print!("\rCreating and writing frame {:04} out of {:04}", frame_count * i as u32 + alpha + 1, frame_count * lenght_list as u32);
                 io::stdout().flush().ok().expect("Could not flush stdout");
 
                 let mut img = DynamicImage::new_rgba8(img1.width(), img1.height());
@@ -304,24 +307,24 @@ fn main() {
                 }
 
                 if write_to_disk {
-                    let img_file1 = std::fs::File::create(format!("{}{:04}.png", output_dir, frame_count * i as u32 + alpha)).unwrap_or_else(|error| {
+                    let img_file = std::fs::File::create(format!("{}{:04}.png", output_dir, frame_count * i as u32 + alpha)).unwrap_or_else(|error| {
                         eprintln!("Error when creating file : {}", error);
                         std::process::exit(-1);
                     });
-                    let encoder1 = image::png::PNGEncoder::new(img_file1);
-                    encoder1.encode(&mut *img.raw_pixels(), img.width(), img.height(), img.color()).unwrap_or_else(|error| {
+                    let encoder = image::png::PNGEncoder::new(img_file);
+                    encoder.encode(&mut *img.raw_pixels(), img.width(), img.height(), img.color()).unwrap_or_else(|error| {
                         eprintln!("Error when encoding file : {}", error);
                         std::process::exit(-1);
                     });
                 }
 
-                let mut f = Frame::from_rgba_speed(img1.width() as u16, img1.height() as u16, &mut *img.raw_pixels(), conversion_speed);
+                let mut f = Frame::from_rgba_speed(img.width() as u16, img.height() as u16, &mut *img.raw_pixels(), conversion_speed);
                 f.delay = (frame_duration / 10.0) as u16;
                 encoder.write_frame(&f).unwrap();
             }
         } else {
             for alpha in 1..(frame_count as u32)  {
-                print!("\rGenrating frame {:04} out of {:04}", frame_count * i as u32 + alpha + 1, frame_count * lenght_list as u32);
+                print!("\rCreating and writing frame {:04} out of {:04}", frame_count * i as u32 + alpha + 1, frame_count * lenght_list as u32);
                 io::stdout().flush().ok().expect("Could not flush stdout");
 
                 let mut img = DynamicImage::new_rgb8(img1.width(), img1.height());
@@ -341,18 +344,18 @@ fn main() {
                 }
 
                 if write_to_disk {
-                    let img_file1 = std::fs::File::create(format!("{}{:04}.png", output_dir, frame_count * i as u32 + alpha)).unwrap_or_else(|error| {
+                    let img_file = std::fs::File::create(format!("{}{:04}.png", output_dir, frame_count * i as u32 + alpha)).unwrap_or_else(|error| {
                         eprintln!("Error when creating file : {}", error);
                         std::process::exit(-1);
                     });
-                    let encoder1 = image::png::PNGEncoder::new(img_file1);
-                    encoder1.encode(&mut *img.raw_pixels(), img.width(), img.height(), img.color()).unwrap_or_else(|error| {
+                    let encoder = image::png::PNGEncoder::new(img_file);
+                    encoder.encode(&mut *img.raw_pixels(), img.width(), img.height(), img.color()).unwrap_or_else(|error| {
                         eprintln!("Error when encoding file : {}", error);
                         std::process::exit(-1);
                     });
                 }
                 
-                let mut f = Frame::from_rgb_speed(img1.width() as u16, img1.height() as u16, &mut *img.raw_pixels(), conversion_speed);
+                let mut f = Frame::from_rgb_speed(img.width() as u16, img.height() as u16, &mut *img.raw_pixels(), conversion_speed);
                 f.delay = (frame_duration / 10.0) as u16;
                 encoder.write_frame(&f).unwrap();
             }
@@ -367,6 +370,15 @@ fn write_json_to_disk(output_dir : &String, images_count : &u32, frame_count : &
         Ok(file) => file,
         Err(err) => return Err(err),
     };
+    let json = generate_json(images_count, frame_count, important_frame_duration, frame_duration);
+    let writed = json_file.write(json.as_bytes());
+    match writed {
+        Ok(_) => return Ok(()),
+        Err(x) => return Err(x),
+    }
+}
+
+fn generate_json(images_count : &u32, frame_count : &u32, important_frame_duration : &f32, frame_duration : &f32) -> String {
     let mut json = String::new();
     json.push_str("{\n\t\"name\": \"output\",\n\t\"loops\": 0,\n\t\"skip_first\": false,\n\t\"frames\": [\n");
     for f in 0..*images_count {
@@ -379,9 +391,14 @@ fn write_json_to_disk(output_dir : &String, images_count : &u32, frame_count : &
     json.remove(json.len() - 1);
     json.push_str("\n\t]\n");
     json.push_str("}");
-    let writed = json_file.write(json.as_bytes());
-    match writed {
-        Ok(_) => return Ok(()),
-        Err(x) => return Err(x),
+    return json
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn json() {
+        let json_res = "{\n\t\"name\": \"output\",\n\t\"loops\": 0,\n\t\"skip_first\": false,\n\t\"frames\": [\n\t\t{\"0000\": \"100/1000\"},\n\t\t{\"0001\": \"10/1000\"},\n\t\t{\"0002\": \"10/1000\"},\n\t\t{\"0003\": \"10/1000\"},\n\t\t{\"0004\": \"10/1000\"},\n\t\t{\"0005\": \"10/1000\"},\n\t\t{\"0006\": \"10/1000\"},\n\t\t{\"0007\": \"10/1000\"},\n\t\t{\"0008\": \"10/1000\"},\n\t\t{\"0009\": \"10/1000\"},\n\t\t{\"0010\": \"100/1000\"},\n\t\t{\"0011\": \"10/1000\"},\n\t\t{\"0012\": \"10/1000\"},\n\t\t{\"0013\": \"10/1000\"},\n\t\t{\"0014\": \"10/1000\"},\n\t\t{\"0015\": \"10/1000\"},\n\t\t{\"0016\": \"10/1000\"},\n\t\t{\"0017\": \"10/1000\"},\n\t\t{\"0018\": \"10/1000\"},\n\t\t{\"0019\": \"10/1000\"}\n\t]\n}";
+        assert_eq!(json_res, crate::generate_json(&2, &10, &100.0, &10.0));
     }
 }

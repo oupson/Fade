@@ -103,7 +103,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "fade"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "gif 0.10.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "image 0.22.3 (registry+https://github.com/rust-lang/crates.io-index)",

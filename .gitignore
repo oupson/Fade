@@ -4,3 +4,4 @@
 *.gif
 *.png
 animation.json
+!/images/*.gif
