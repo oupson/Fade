@@ -13,6 +13,8 @@ fn main() {
 
     let mut frame_count : u32 = 10;
     let mut frame_duration : f32 = 1000.0 / 10.0;
+    let mut important_frame_duration : f32 = 1000.0;
+    let mut lock_duration = false;
 
     let mut resize = false;
     let mut resize_width = None;
@@ -32,6 +34,7 @@ fn main() {
         println!("\t-w Write frames to disk.");
         println!("\t-a Write a .json used by apngasm.");
         println!("\t-n <count> Set frames count.");
+        println!("\t-d <important> <standard> Set durations of frame in ms");
         println!("\t-s <speed> Set gif conversion speed. Must be between 1 and 30, 30 is loss quality but faster.");
         println!("\t-r <width> <height> Resize image.");
         std::process::exit(0);
@@ -55,7 +58,9 @@ fn main() {
             "-n" => {
                 if args.len() > i + 1 {
                     frame_count =  args[i + 1].parse::<u32>().unwrap();
-                    frame_duration = 1000.0 / frame_count as f32;
+                    if !lock_duration {
+                        frame_duration = 1000.0 / frame_count as f32;
+                    }
                 } else {
                     eprintln!("Error : Missing number of frames. Ex : fade image1.jpg image2.jpg -n 20 will produce a gif with 20 frames per images.");
                     std::process::exit(-1);
@@ -86,6 +91,17 @@ fn main() {
                 write_json = true; 
                 is_images_arg = false;
             },
+            "-d" => {
+                if args.len() > i + 2 {
+                    lock_duration = true;
+                    important_frame_duration = args[i + 1].parse::<f32>().unwrap();
+                    frame_duration = args[i + 2].parse::<f32>().unwrap();
+                } else {
+                    eprintln!("Error : Missing durations. Ex : fade image1.jpg image2.jpg -d 1000 10");
+                    std::process::exit(-1);
+                }
+                is_images_arg = false;
+            }
             _ => {
                 if is_images_arg && i > 0 {
                     images.push(arg.to_string());
@@ -94,10 +110,7 @@ fn main() {
         }
     }
     
-    if images.len() == 0 {
-        eprintln!("No images provided !");
-        std::process::exit(-1);
-    } else if images.len() == 1 {
+    if images.len() == 1 {
         if images[0].contains("*") {
             let end_name = images[0].replace("*", "");
             images.clear();
@@ -110,6 +123,11 @@ fn main() {
                 }
             }
         }
+    }
+
+    if images.len() == 0 {
+        eprintln!("No images provided !");
+        std::process::exit(-1);
     }
 
     if !write_to_disk && write_json {
@@ -134,7 +152,8 @@ fn main() {
     if output_dir != "" {
         print!("\tOutput directory : {}\n", output_dir);
     }
-    print!("\tTotal of frames : {}, with a delay of : {}ms\n", frame_count, frame_duration);
+    print!("\tTotal of frames : {}\n", frame_count * images.len() as u32);
+    print!("\tDuration of standard frames : {}ms, duration of important frames : {}ms\n", frame_duration, important_frame_duration);
     print!("\tWrite frames to disk : {}\n", write_to_disk);
     print!("\tWrite .json for apngasm : {}\n", write_json);
     print!("\tSpeed of conversion : {}\n", conversion_speed);
@@ -152,16 +171,16 @@ fn main() {
                 eprintln!("Error when creating file : {}", error);
                 std::process::exit(-1);
             });
-            println!("Created {} directory", output_dir);
+            println!("Created {} directory\n", output_dir);
         }
     }
 
     if write_json {
-        write_json_to_disk(&output_dir, &frame_count, &frame_duration).unwrap_or_else(|error| {
+        write_json_to_disk(&output_dir, &(images.len() as u32), &frame_count, &important_frame_duration, &frame_duration).unwrap_or_else(|error| {
             eprintln!("Error when writing json : {}", error);
             std::process::exit(-1);
         });
-        println!("Writed json to disk");
+        println!("Writed json to disk\n");
     }
 
     let mut image_list : Vec<DynamicImage> = Vec::new();
@@ -251,7 +270,7 @@ fn main() {
             } else {
                 frame1 = Frame::from_rgb_speed(width as u16, height as u16, &mut *img1.raw_pixels(), conversion_speed);
             };
-            frame1.delay = 100;
+            frame1.delay = (important_frame_duration / 10.0) as u16;
             encoder.write_frame(&frame1).unwrap()
         }
 
@@ -342,7 +361,7 @@ fn main() {
     println!("\nDone !");
 }
 
-fn write_json_to_disk(output_dir : &String, frame_count : &u32, frame_duration : &f32) -> Result<(), io::Error> {
+fn write_json_to_disk(output_dir : &String, images_count : &u32, frame_count : &u32, important_frame_duration : &f32, frame_duration : &f32) -> Result<(), io::Error> {
     let json_file = File::create(format!("{}animation.json", output_dir));
     let mut json_file = match json_file {
         Ok(file) => file,
@@ -350,16 +369,15 @@ fn write_json_to_disk(output_dir : &String, frame_count : &u32, frame_duration :
     };
     let mut json = String::new();
     json.push_str("{\n\t\"name\": \"output\",\n\t\"loops\": 0,\n\t\"skip_first\": false,\n\t\"frames\": [\n");
-    json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", 0, 1000).as_str());
-    for i in 1..*frame_count {
-        json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", i, frame_duration).as_str());
+    for f in 0..*images_count {
+        json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", f * frame_count, important_frame_duration).as_str());
+        for i in 1..*frame_count {
+            json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", i + f * frame_count, frame_duration).as_str());
+        }
     }
-    json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", frame_count, 1000).as_str());
-    for i in 1..(*frame_count - 1) {
-        json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}},\n", frame_count + i, frame_duration).as_str());
-    }
-    json.push_str(format!("\t\t{{\"{:04}\": \"{}/1000\"}}\n", frame_count + frame_count - 1, frame_duration).as_str());
-    json.push_str("\t]\n");
+    json.remove(json.len() - 1);
+    json.remove(json.len() - 1);
+    json.push_str("\n\t]\n");
     json.push_str("}");
     let writed = json_file.write(json.as_bytes());
     match writed {
